@@ -9,7 +9,7 @@ pip install requests
 
 curl -o $PREFIX/bin/koland https://raw.githubusercontent.com/Kolandone/workercreator/main/kol.py
 
-# Make the script executable
+
 chmod +x $PREFIX/bin/koland
 
 
