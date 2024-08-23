@@ -8,4 +8,4 @@ apt-get install jq -y
 
 # Install Wrangler
 npm install -g wrangler
-bash <(curl -fsSL https://raw.githubusercontent.com/Kolandone1/workercreator/main/Thek.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Kolandone/workercreator/main/kol.sh)
