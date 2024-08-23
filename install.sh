@@ -7,4 +7,4 @@ pkg update -y && pkg upgrade -y
 pkg install proot-distro -y
 proot-distro install ubuntu
 apt install nodejs -y
-proot-distro login ubuntu -- bash -c "bash <(curl -fsSL https://raw.githubusercontent.com/Kolandone1/workercreator/main/dep.sh)"
+proot-distro login ubuntu -- bash -c "bash <(curl -fsSL https://raw.githubusercontent.com/Kolandone/workercreator/main/dep.sh)"
