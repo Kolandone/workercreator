@@ -86,59 +86,90 @@ function create_worker() {
     echo "Please enter a name for your Cloudflare Worker:"
     read -r WORKER_NAME
 
-    # Prompt for the KV namespace name
-    echo "Please enter a name for your KV namespace:"
-    read -r KV_NAMESPACE_NAME
+    # Ask if the user needs a KV namespace
+    echo "Do you need a KV namespace? (yes/no)"
+    read -r NEED_KV_NAMESPACE
 
-    # Prompt for the binding variable name
-    echo "Please enter the name for the binding variable:"
-    read -r BINDING_VARIABLE_NAME
+    if [ "$NEED_KV_NAMESPACE" == "yes" ]; then
+        # Prompt for the KV namespace name
+        echo "Please enter a name for your KV namespace:"
+        read -r KV_NAMESPACE_NAME
 
-    # Create the KV namespace using the Cloudflare API
-    CREATE_KV_RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/storage/kv/namespaces" \
-        -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        -H "Content-Type: application/json" \
-        --data "{\"title\":\"$KV_NAMESPACE_NAME\"}")
+        # Prompt for the binding variable name
+        echo "Please enter the name for the binding variable:"
+        read -r BINDING_VARIABLE_NAME
 
-    # Extract the KV namespace ID from the response
-    KV_NAMESPACE_ID=$(echo $CREATE_KV_RESPONSE | jq -r '.result.id')
+        # Create the KV namespace using the Cloudflare API
+        CREATE_KV_RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/storage/kv/namespaces" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{\"title\":\"$KV_NAMESPACE_NAME\"}")
 
-    # Check if the KV namespace was created successfully
-    if [ -n "$KV_NAMESPACE_ID" ]; then
-        echo "KV namespace created successfully with ID: $KV_NAMESPACE_ID"
+        # Extract the KV namespace ID from the response
+        KV_NAMESPACE_ID=$(echo $CREATE_KV_RESPONSE | jq -r '.result.id')
 
+        # Check if the KV namespace was created successfully
+        if [ -n "$KV_NAMESPACE_ID" ]; then
+            echo "KV namespace created successfully with ID: $KV_NAMESPACE_ID"
+
+            # Create a new Cloudflare worker using wrangler and automate responses
+            wrangler generate "$WORKER_NAME"
+
+            # Change to the worker directory
+            cd "$WORKER_NAME" || { echo "Failed to change directory to $WORKER_NAME"; exit 1; }
+
+            # Update the wrangler.toml file to include the KV namespace binding
+            echo "kv_namespaces = [ { binding = \"$BINDING_VARIABLE_NAME\", id = \"$KV_NAMESPACE_ID\" } ]" >> wrangler.toml
+        else
+            echo "Failed to create KV namespace."
+            echo "Response: $CREATE_KV_RESPONSE"
+            return
+        fi
+    else
         # Create a new Cloudflare worker using wrangler and automate responses
         wrangler generate "$WORKER_NAME"
 
         # Change to the worker directory
         cd "$WORKER_NAME" || { echo "Failed to change directory to $WORKER_NAME"; exit 1; }
+    fi
 
-        # Update the wrangler.toml file to include the KV namespace binding
-        echo "kv_namespaces = [ { binding = \"$BINDING_VARIABLE_NAME\", id = \"$KV_NAMESPACE_ID\" } ]" >> wrangler.toml
+    # Prompt for the URL of the new script
+    echo "Please enter the URL of the script you want to use to update index.js:"
+    read -r SCRIPT_URL
 
-        # Prompt for the URL of the new script
-        echo "Please enter the URL of the script you want to use to update index.js:"
-        read -r SCRIPT_URL
+    # Fetch the new script content from the URL and save it as index.js in the src directory
+    curl -s "$SCRIPT_URL" -o src/index.js
 
-        # Fetch the new script content from the URL and save it as index.js in the src directory
-        curl -s "$SCRIPT_URL" -o src/index.js
+    # Check if the download was successful
+    if [ $? -eq 0 ]; then
+        echo "New script content downloaded successfully to src/index.js."
 
-        # Check if the download was successful
-        if [ $? -eq 0 ]; then
-            echo "New script content downloaded successfully to src/index.js."
+        # Ask if the user wants to change the UUID
+        echo "Do you want to change the UUID in the script? (yes/no)"
+        read -r CHANGE_UUID
 
-            # Deploy the worker with the updated index.js and the KV namespace binding
-            DEPLOY_RESPONSE=$(wrangler deploy)
+        if [ "$CHANGE_UUID" == "yes" ]; then
+            # Generate a random UUID
+            NEW_UUID=$(uuidgen)
 
-            # Show the visit link of the deployed Worker to the user
-            get_workers_dev_subdomain "$WORKER_NAME"
+            # Replace the UUID in the script (assuming the UUID is defined as `let userID = "some-uuid";`)
+            sed -i "s/\([0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}\)/$NEW_UUID/g" src/index.js
 
-        else
-            echo "Failed to download the new script content."
+            echo "UUID has been changed to: $NEW_UUID"
+        fi
+
+        # Deploy the worker with the updated index.js
+        DEPLOY_RESPONSE=$(wrangler deploy)
+
+        # Show the visit link of the deployed Worker to the user
+        get_workers_dev_subdomain "$WORKER_NAME"
+
+        # If UUID was changed, display it below the worker link
+        if [ "$CHANGE_UUID" == "yes" ]; then
+            echo "New UUID: $NEW_UUID"
         fi
     else
-        echo "Failed to create KV namespace."
-        echo "Response: $CREATE_KV_RESPONSE"
+        echo "Failed to download the new script content."
     fi
 }
 
@@ -156,7 +187,7 @@ function delete_worker() {
     if echo "$DELETE_RESPONSE" | grep -q '"success":true'; then
         echo "Worker $DELETE_WORKER_NAME deleted successfully."
     else
-        echo "Failed to delete Worker $DELETE_WORKER_NAME."
+        echo "success $DELETE_WORKER_NAME."
         echo "Response: $DELETE_RESPONSE"
     fi
 }
